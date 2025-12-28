@@ -11,11 +11,9 @@ crate-type = ["cdylib", "rlib"]
 
 [features]
 default = ["hydrate"]
-csr = ["leptos/csr", "leptos_meta/csr", "leptos_router/csr"]
+csr = ["leptos/csr"]
 hydrate = [
     "leptos/hydrate",
-    "leptos_meta/hydrate",
-    "leptos_router/hydrate",
     "console_error_panic_hook",
     "wasm-bindgen",
 ]

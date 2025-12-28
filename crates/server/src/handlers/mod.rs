@@ -1,5 +1,6 @@
 pub mod auth;
 pub mod health;
+pub mod public;
 pub mod users;
 
 use axum::{http::StatusCode, Json};

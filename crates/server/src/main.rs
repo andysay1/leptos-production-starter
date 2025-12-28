@@ -4,24 +4,23 @@ mod state;
 mod telemetry;
 
 use crate::handlers::{auth, health, users};
+use crate::handlers::public;
 use crate::state::AppState;
-use axum::extract::State;
-use cookie::Cookie;
-use domain::UserRepository;
 use anyhow::Context;
 use axum::{
     http,
     http::{HeaderValue, StatusCode},
+    response::Redirect,
     middleware,
     routing::{get, post},
     Router,
 };
 use leptos_axum::{generate_route_list, LeptosRoutes};
-use shared::dto::UserResponse;
 use metrics_exporter_prometheus::PrometheusHandle;
 use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::future::IntoFuture;
 use tokio::task::LocalSet;
 use tower_http::cors::CorsLayer;
 use tower_http::services::ServeDir;
@@ -34,7 +33,7 @@ async fn main() -> anyhow::Result<()> {
     let config = shared::config::AppConfig::from_env()?;
     telemetry::init_tracing(&config.tracing)?;
 
-    let leptos_config = leptos_config::get_configuration(None).await?;
+    let leptos_config = leptos_config::get_configuration(None)?;
     let mut leptos_options = leptos_config.leptos_options;
 
     let addr: SocketAddr = config.addr().context("invalid server addr")?;
@@ -70,13 +69,12 @@ async fn main() -> anyhow::Result<()> {
 
     info!("listening on http://{}", addr);
     let listener = tokio::net::TcpListener::bind(addr).await?;
-    let service = app.into_make_service();
 
     // Leptos uses !Send futures in some cases; wrap server in LocalSet to allow spawn_local.
     let local = LocalSet::new();
     local
         .run_until(async move {
-            axum::serve(listener, service).await?;
+            axum::serve(listener, app).into_future().await?;
             Ok::<(), anyhow::Error>(())
         })
         .await?;
@@ -90,19 +88,20 @@ fn build_router(
     state: AppState,
     leptos_options: leptos_config::LeptosOptions,
     metrics_handle: PrometheusHandle,
-) -> Router {
-    let site_root: PathBuf = PathBuf::from(&leptos_options.site_root);
+) -> Router<()> {
+    let site_root: PathBuf = PathBuf::from(leptos_options.site_root.as_ref());
     let pkg_dir = site_root.join("pkg");
-    let leptos_routes = generate_route_list(app::App);
+    let leptos_routes = generate_route_list(app::SpaApp);
+    let shell_options = state.leptos_options.clone();
 
-    let auth_routes = Router::new()
+    let auth_routes = Router::<AppState>::new()
         .route("/api/auth/register", post(auth::register))
         .route("/api/auth/login", post(auth::login))
         .route("/api/auth/logout", post(auth::logout))
         .route("/api/auth/refresh", post(auth::refresh))
         .route("/api/me", get(auth::me));
 
-    let api_routes = Router::new()
+    let api_routes = Router::<AppState>::new()
         .route("/api/health", get(health::health))
         .route("/api/ready", get(health::ready))
         .route("/api/users", get(users::list_users))
@@ -110,7 +109,7 @@ fn build_router(
 
     let trace_layer = TraceLayer::new_for_http();
 
-    let metrics_route = Router::new().route(
+    let metrics_route = Router::<AppState>::new().route(
         "/metrics",
         get({
             move || {
@@ -129,10 +128,19 @@ fn build_router(
         }),
     );
 
-    Router::new()
+    let router = Router::<AppState>::new()
+        .route("/", get(public::landing))
+        .route("/login", get(|| async { Redirect::temporary("/app/login") }))
+        .route("/register", get(|| async { Redirect::temporary("/app/register") }))
+        .route("/app/login", post(auth::login_form))
+        .route("/app/register", post(auth::register_form))
         .merge(api_routes)
         .merge(metrics_route)
-        .leptos_routes(&state, leptos_routes, app::App)
+        .leptos_routes(&state, leptos_routes, move || {
+            leptos::prelude::view! { <app::SpaShell options=shell_options.clone()/> }
+        });
+
+    router
         .nest_service("/pkg", ServeDir::new(pkg_dir))
         .nest_service("/assets", ServeDir::new(&site_root))
         .layer(middleware::from_fn(inject_request_id))

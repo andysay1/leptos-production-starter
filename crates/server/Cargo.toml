@@ -12,7 +12,7 @@ app = { path = "../app", default-features = false, features = ["ssr"] }
 argon2 = { workspace = true }
 async-trait = { workspace = true }
 axum = { workspace = true }
-axum-extra = { version = "0.9", features = ["cookie"] }
+axum-extra = { version = "0.12", features = ["cookie"] }
 chrono = { workspace = true }
 config = { workspace = true }
 db = { path = "../db" }

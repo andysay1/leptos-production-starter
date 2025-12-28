@@ -1,5 +1,4 @@
 use crate::state::AppState;
-use async_trait::async_trait;
 use axum::{extract::State, http::StatusCode, Json};
 use shared::dto::HealthStatus;
 use shared::types::RequestId;
@@ -55,21 +54,23 @@ pub async fn ready(
 #[derive(Clone, Debug)]
 pub struct RequestIdExtractor(pub RequestId);
 
-#[async_trait]
 impl<S> axum::extract::FromRequestParts<S> for RequestIdExtractor
 where
     S: Send + Sync,
 {
     type Rejection = (StatusCode, String);
 
-    async fn from_request_parts(
+    fn from_request_parts(
         parts: &mut axum::http::request::Parts,
         _state: &S,
-    ) -> Result<Self, Self::Rejection> {
-        if let Some(id) = parts.extensions.get::<RequestId>() {
-            Ok(RequestIdExtractor(id.clone()))
-        } else {
-            Ok(RequestIdExtractor(Uuid::new_v4().to_string()))
-        }
+    ) -> impl std::future::Future<Output = Result<Self, Self::Rejection>> + Send
+    {
+        let request_id = parts
+            .extensions
+            .get::<RequestId>()
+            .cloned()
+            .unwrap_or_else(|| Uuid::new_v4().to_string());
+
+        async move { Ok(RequestIdExtractor(request_id)) }
     }
 }

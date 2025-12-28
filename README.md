@@ -3,7 +3,7 @@
 A production-ready Leptos/Axum template with SSR + hydration, auth, SQLx migrations, Redis, observability, Docker/CI, and a Tailwind-powered UI.
 
 ## Prerequisites
-- Rust toolchain (MSRV 1.84.0) and `wasm32-unknown-unknown` target: `rustup target add wasm32-unknown-unknown`
+- Rust toolchain (MSRV 1.88.0) and `wasm32-unknown-unknown` target: `rustup target add wasm32-unknown-unknown`
 - Node.js (for Tailwind; optional if you rely on cargo-leptos to run Tailwind CLI)
 - Docker + Docker Compose (for Postgres/Redis in dev)
 - `cargo-leptos` and `wasm-bindgen` CLIs installed (binaries are already in `~/.cargo/bin` from this setup; install otherwise via the Leptos docs)

@@ -2,9 +2,10 @@ use crate::handlers::{error_response, RequestIdExtractor};
 use crate::security;
 use crate::state::AppState;
 use axum::{
+    extract::Form,
     extract::State,
     http::{HeaderMap, StatusCode},
-    response::IntoResponse,
+    response::{IntoResponse, Redirect},
     Json,
 };
 use axum_extra::extract::CookieJar;
@@ -41,6 +42,38 @@ pub async fn login(
     match state.auth.login(payload).await {
         Ok(user) => match issue_session(&state, jar, user).await {
             Ok((jar, tokens)) => (jar, (StatusCode::OK, Json(tokens))).into_response(),
+            Err(err) => error_response(err, &request_id.0).into_response(),
+        },
+        Err(err) => error_response(err, &request_id.0).into_response(),
+    }
+}
+
+#[instrument(skip(state, jar, payload))]
+pub async fn login_form(
+    State(state): State<AppState>,
+    request_id: RequestIdExtractor,
+    jar: CookieJar,
+    Form(payload): Form<LoginRequest>,
+) -> impl IntoResponse {
+    match state.auth.login(payload).await {
+        Ok(user) => match issue_session(&state, jar, user).await {
+            Ok((jar, _tokens)) => (jar, Redirect::to("/app")).into_response(),
+            Err(err) => error_response(err, &request_id.0).into_response(),
+        },
+        Err(err) => error_response(err, &request_id.0).into_response(),
+    }
+}
+
+#[instrument(skip(state, jar, payload))]
+pub async fn register_form(
+    State(state): State<AppState>,
+    request_id: RequestIdExtractor,
+    jar: CookieJar,
+    Form(payload): Form<RegisterRequest>,
+) -> impl IntoResponse {
+    match state.auth.register(payload, None).await {
+        Ok(user) => match issue_session(&state, jar, user).await {
+            Ok((jar, _tokens)) => (jar, Redirect::to("/app")).into_response(),
             Err(err) => error_response(err, &request_id.0).into_response(),
         },
         Err(err) => error_response(err, &request_id.0).into_response(),
