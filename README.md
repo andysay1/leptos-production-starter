@@ -62,3 +62,17 @@ CI runs migrations against ephemeral Postgres.
 ## Notes
 - If you see `OpenTelemetry ... Connection refused`, remove/clear `OTEL_EXPORTER_OTLP_ENDPOINT` unless a collector is running.
 - Ensure `COOKIE_DOMAIN` matches the host you open (e.g. use `localhost` not `127.0.0.1` if the cookie domain is `localhost`).
+
+## Nix (optional)
+If you use Nix, you can get a reproducible dev environment with pinned Rust + WASM target + tooling:
+```bash
+nix develop
+npm ci
+make dev
+```
+
+Release build + run:
+```bash
+cargo leptos build --release --precompress --split
+cargo run -p server --release
+```
