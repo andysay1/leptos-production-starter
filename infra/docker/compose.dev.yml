@@ -1,0 +1,43 @@
+version: '3.9'
+services:
+  db:
+    image: postgres:15
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: leptos_app
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+
+  app:
+    build:
+      context: ../..
+      dockerfile: infra/docker/Dockerfile
+    environment:
+      DATABASE_URL: postgres://postgres:postgres@db:5432/leptos_app
+      REDIS_URL: redis://redis:6379
+      APP_HOST: 0.0.0.0
+      APP_PORT: 3000
+      APP_BASE_URL: http://localhost:3000
+      JWT_SECRET: superlongsecretstringthatshouldbeatleast32chars!
+      REFRESH_TOKEN_SECRET: superlongrefreshsecretthatshouldbeatleast32chars!
+      CSRF_SECRET: csrfsecretstringthatshouldbeatleast16
+      COOKIE_DOMAIN: localhost
+      RUST_LOG: info,server=debug
+    ports:
+      - "3000:3000"
+    depends_on:
+      - db
+      - redis
+
+volumes:
+  pgdata:

@@ -1,0 +1,32 @@
+# Rust
+/target/
+**/*.rs.bk
+
+# Node
+/node_modules/
+/npm-debug.log*
+/yarn-debug.log*
+/yarn-error.log*
+/pnpm-debug.log*
+
+# Leptos / frontend build artifacts (in case tools output to these)
+/dist/
+/pkg/
+assets/pkg/
+assets/dist/
+
+# Local environment / secrets
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# IDE / OS
+/.idea/
+/.vscode/
+**/.DS_Store
+
+# Misc
+/tmp/
+coverage/
+*.log

@@ -1,0 +1,3 @@
+[patch."crates-io"]
+home = { path = "/Users/oneclick/cmsddrw2/vendor/home" }
+base64ct = { path = "/Users/oneclick/cmsddrw2/vendor/base64ct" }

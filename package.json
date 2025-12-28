@@ -1,0 +1,14 @@
+{
+  "name": "leptos-template",
+  "private": true,
+  "version": "0.1.0",
+  "scripts": {
+    "dev": "tailwindcss -i ./assets/tailwind.css -o ./assets/pkg/app.css --watch",
+    "build": "tailwindcss -i ./assets/tailwind.css -o ./assets/pkg/app.css --minify"
+  },
+  "devDependencies": {
+    "autoprefixer": "^10.4.16",
+    "postcss": "^8.4.32",
+    "tailwindcss": "^3.4.1"
+  }
+}

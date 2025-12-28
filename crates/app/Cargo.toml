@@ -1,0 +1,44 @@
+[package]
+name = "app"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[features]
+default = ["hydrate"]
+csr = ["leptos/csr", "leptos_meta/csr", "leptos_router/csr"]
+hydrate = [
+    "leptos/hydrate",
+    "leptos_meta/hydrate",
+    "leptos_router/hydrate",
+    "console_error_panic_hook",
+    "wasm-bindgen",
+]
+ssr = [
+    "leptos/ssr",
+    "leptos_meta/ssr",
+    "leptos_router/ssr",
+    "dep:leptos_axum",
+]
+
+[dependencies]
+console_error_panic_hook = { version = "0.1", optional = true }
+leptos = { workspace = true, default-features = false }
+leptos_axum = { workspace = true, optional = true, default-features = false }
+leptos_meta = { workspace = true, default-features = false }
+leptos_router = { workspace = true, default-features = false }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+shared = { path = "../shared" }
+thiserror = { workspace = true }
+wasm-bindgen = { version = "0.2", optional = true }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+reqwasm = "0.5"
+wasm-bindgen-futures = "0.4"
+web-sys = { version = "0.3", features = ["Window", "Storage"] }
