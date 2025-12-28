@@ -8,6 +8,8 @@ use shared::types::Claims;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use time::Duration as TimeDuration;
 
+pub const FLASH_ERROR_COOKIE_NAME: &str = "__flash_error";
+
 pub fn sign_access_token(
     user_id: uuid::Uuid,
     role: shared::types::UserRole,
@@ -78,6 +80,25 @@ pub fn build_access_cookie(token: &str, config: &AppConfig) -> Cookie<'static> {
         (config.auth.access_token_ttl_minutes * 60) as i64,
     ));
     cookie.build()
+}
+
+pub fn build_flash_error_cookie(message: &str, config: &AppConfig, max_age_seconds: i64) -> Cookie<'static> {
+    let encoded = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(message.as_bytes());
+    Cookie::build((FLASH_ERROR_COOKIE_NAME.to_string(), encoded))
+        .http_only(true)
+        .same_site(SameSite::Lax)
+        .secure(config.auth.cookie_secure)
+        .path("/")
+        .domain(config.server.cookie_domain.clone())
+        .max_age(TimeDuration::seconds(max_age_seconds))
+        .build()
+}
+
+pub fn decode_flash_error(value: &str) -> Option<String> {
+    let bytes = base64::engine::general_purpose::URL_SAFE_NO_PAD
+        .decode(value)
+        .ok()?;
+    String::from_utf8(bytes).ok()
 }
 
 pub fn generate_csrf_token() -> String {

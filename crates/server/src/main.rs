@@ -3,7 +3,7 @@ mod security;
 mod state;
 mod telemetry;
 
-use crate::handlers::{auth, health, users};
+use crate::handlers::{auth, health, pages, users};
 use crate::handlers::public;
 use crate::state::AppState;
 use anyhow::Context;
@@ -15,7 +15,6 @@ use axum::{
     routing::{get, post},
     Router,
 };
-use leptos_axum::{generate_route_list, LeptosRoutes};
 use metrics_exporter_prometheus::PrometheusHandle;
 use std::net::SocketAddr;
 use std::path::PathBuf;
@@ -33,7 +32,19 @@ async fn main() -> anyhow::Result<()> {
     let config = shared::config::AppConfig::from_env()?;
     telemetry::init_tracing(&config.tracing)?;
 
-    let leptos_config = leptos_config::get_configuration(None)?;
+    // Leptos/ServerFn uses `any_spawner` for background tasks; initialize it for Tokio.
+    let _ = any_spawner::Executor::init_tokio();
+
+    // When running the server directly (e.g. `cargo run -p server --release`),
+    // cargo-leptos runtime env vars (like `LEPTOS_OUTPUT_NAME`) may be absent.
+    // Read workspace metadata from the workspace `Cargo.toml`.
+    let workspace_cargo_toml = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../..")
+        .join("Cargo.toml");
+    let workspace_cargo_toml = workspace_cargo_toml
+        .to_str()
+        .unwrap_or("Cargo.toml");
+    let leptos_config = leptos_config::get_configuration(Some(workspace_cargo_toml))?;
     let mut leptos_options = leptos_config.leptos_options;
 
     let addr: SocketAddr = config.addr().context("invalid server addr")?;
@@ -91,8 +102,6 @@ fn build_router(
 ) -> Router<()> {
     let site_root: PathBuf = PathBuf::from(leptos_options.site_root.as_ref());
     let pkg_dir = site_root.join("pkg");
-    let leptos_routes = generate_route_list(app::SpaApp);
-    let shell_options = state.leptos_options.clone();
 
     let auth_routes = Router::<AppState>::new()
         .route("/api/auth/register", post(auth::register))
@@ -133,32 +142,67 @@ fn build_router(
         .route("/login", get(|| async { Redirect::temporary("/app/login") }))
         .route("/register", get(|| async { Redirect::temporary("/app/register") }))
         .route("/logout", get(auth::logout_get))
-        .route("/app/login", post(auth::login_form))
-        .route("/app/register", post(auth::register_form))
+        .route("/app", get(pages::app_dashboard))
+        .route("/app/", get(|| async { Redirect::temporary("/app") }))
+        .route("/app/login", get(pages::app_login_page).post(auth::login_form))
+        .route(
+            "/app/register",
+            get(pages::app_register_page).post(auth::register_form),
+        )
+        .route("/app/{*path}", get(pages::app_not_found))
+        // wasm-bindgen's JS glue sometimes expects `app_bg.wasm`, while cargo-leptos outputs `app.wasm`.
+        // Redirect keeps the app working and lets ServeDir handle precompressed variants for `app.wasm`.
+        .route(
+            "/pkg/app_bg.wasm",
+            get(|| async { Redirect::temporary("/pkg/app.wasm") }),
+        )
         .merge(api_routes)
-        .merge(metrics_route)
-        .leptos_routes(&state, leptos_routes, move || {
-            leptos::prelude::view! { <app::SpaShell options=shell_options.clone()/> }
-        });
+        .merge(metrics_route);
+
+    // In development `cargo-leptos watch` typically doesn't regenerate `.br/.gz`.
+    // If we serve stale precompressed assets, browsers may load mismatched JS/WASM and crash.
+    let serve_precompressed = state.config.server.env.is_prod();
+    let mut pkg_service = ServeDir::new(pkg_dir);
+    let mut assets_service = ServeDir::new(&site_root);
+    if serve_precompressed {
+        pkg_service = pkg_service.precompressed_br().precompressed_gzip();
+        assets_service = assets_service.precompressed_br().precompressed_gzip();
+    }
 
     router
-        .nest_service(
-            "/pkg",
-            ServeDir::new(pkg_dir)
-                .precompressed_br()
-                .precompressed_gzip(),
-        )
-        .nest_service(
-            "/assets",
-            ServeDir::new(&site_root)
-                .precompressed_br()
-                .precompressed_gzip(),
-        )
+        .nest_service("/pkg", pkg_service)
+        .nest_service("/assets", assets_service)
+        .layer(middleware::from_fn_with_state(
+            state.clone(),
+            dev_no_cache_pkg_assets,
+        ))
         .layer(middleware::from_fn(inject_request_id))
         .layer(trace_layer)
         .layer(CorsLayer::permissive())
         .with_state(state)
         .fallback(public::not_found)
+}
+
+async fn dev_no_cache_pkg_assets(
+    axum::extract::State(state): axum::extract::State<AppState>,
+    req: axum::http::Request<axum::body::Body>,
+    next: middleware::Next,
+) -> axum::response::Response {
+    let path = req.uri().path().to_string();
+    let mut res = next.run(req).await;
+
+    if !state.config.server.env.is_prod() && (path.starts_with("/pkg/") || path.starts_with("/assets/")) {
+        res.headers_mut().insert(
+            http::header::CACHE_CONTROL,
+            HeaderValue::from_static("no-store, max-age=0"),
+        );
+        res.headers_mut().insert(
+            http::header::PRAGMA,
+            HeaderValue::from_static("no-cache"),
+        );
+    }
+
+    res
 }
 
 async fn inject_request_id(

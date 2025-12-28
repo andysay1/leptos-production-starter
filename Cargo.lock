@@ -127,7 +127,6 @@ dependencies = [
  "leptos",
  "leptos_axum",
  "leptos_meta",
- "leptos_router",
  "reqwasm",
  "serde",
  "serde_json",
@@ -3507,6 +3506,7 @@ dependencies = [
 name = "server"
 version = "0.1.0"
 dependencies = [
+ "any_spawner",
  "anyhow",
  "app",
  "argon2",
@@ -3528,7 +3528,6 @@ dependencies = [
  "leptos_axum",
  "leptos_config",
  "leptos_meta",
- "leptos_router",
  "metrics 0.21.1",
  "metrics-exporter-prometheus",
  "once_cell",

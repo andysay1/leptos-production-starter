@@ -1,8 +1,7 @@
 #[cfg(feature = "hydrate")]
 pub fn main() {
-    use app::SpaApp;
     console_error_panic_hook::set_once();
-    leptos::mount::hydrate_body(|| leptos::prelude::view! { <SpaApp/> });
+    leptos::mount::hydrate_islands();
 }
 
 #[cfg(not(feature = "hydrate"))]

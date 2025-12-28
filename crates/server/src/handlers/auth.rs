@@ -51,32 +51,66 @@ pub async fn login(
 #[instrument(skip(state, jar, payload))]
 pub async fn login_form(
     State(state): State<AppState>,
-    request_id: RequestIdExtractor,
+    _request_id: RequestIdExtractor,
     jar: CookieJar,
     Form(payload): Form<LoginRequest>,
 ) -> impl IntoResponse {
     match state.auth.login(payload).await {
-        Ok(user) => match issue_session(&state, jar, user).await {
+        Ok(user) => {
+            let jar_for_err = jar.clone();
+            match issue_session(&state, jar, user).await {
             Ok((jar, _tokens)) => (jar, Redirect::to("/app")).into_response(),
-            Err(err) => error_response(err, &request_id.0).into_response(),
-        },
-        Err(err) => error_response(err, &request_id.0).into_response(),
+            Err(err) => {
+                    let jar = jar_for_err.add(security::build_flash_error_cookie(
+                        &err.to_string(),
+                        &state.config,
+                        15,
+                    ));
+                    (jar, Redirect::to("/app/login")).into_response()
+            }
+            }
+        }
+        Err(err) => {
+            let jar = jar.add(security::build_flash_error_cookie(
+                &err.to_string(),
+                &state.config,
+                15,
+            ));
+            (jar, Redirect::to("/app/login")).into_response()
+        }
     }
 }
 
 #[instrument(skip(state, jar, payload))]
 pub async fn register_form(
     State(state): State<AppState>,
-    request_id: RequestIdExtractor,
+    _request_id: RequestIdExtractor,
     jar: CookieJar,
     Form(payload): Form<RegisterRequest>,
 ) -> impl IntoResponse {
     match state.auth.register(payload, None).await {
-        Ok(user) => match issue_session(&state, jar, user).await {
+        Ok(user) => {
+            let jar_for_err = jar.clone();
+            match issue_session(&state, jar, user).await {
             Ok((jar, _tokens)) => (jar, Redirect::to("/app")).into_response(),
-            Err(err) => error_response(err, &request_id.0).into_response(),
-        },
-        Err(err) => error_response(err, &request_id.0).into_response(),
+            Err(err) => {
+                    let jar = jar_for_err.add(security::build_flash_error_cookie(
+                        &err.to_string(),
+                        &state.config,
+                        15,
+                    ));
+                    (jar, Redirect::to("/app/register")).into_response()
+            }
+            }
+        }
+        Err(err) => {
+            let jar = jar.add(security::build_flash_error_cookie(
+                &err.to_string(),
+                &state.config,
+                15,
+            ));
+            (jar, Redirect::to("/app/register")).into_response()
+        }
     }
 }
 

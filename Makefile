@@ -9,7 +9,7 @@ LEPTOS ?= cargo leptos
 dev:
 	$(COMPOSE) -f infra/docker/compose.dev.yml up -d db redis
 	APP_ENV=development DATABASE_URL=$(DATABASE_URL) REDIS_URL=$(REDIS_URL) RUST_LOG=$(RUST_LOG) \
-		$(LEPTOS) watch -- --bin server
+		$(LEPTOS) watch --split -- --bin server
 
 lint: fmt clippy
 
@@ -32,7 +32,7 @@ seed:
 	DATABASE_URL=$(DATABASE_URL) REDIS_URL=$(REDIS_URL) cargo run -p cli -- seed
 
 build:
-	$(LEPTOS) build --release -- --bin server
+	$(LEPTOS) build --release --precompress --split -- --bin server
 
 docker:
 	$(COMPOSE) -f infra/docker/compose.dev.yml build

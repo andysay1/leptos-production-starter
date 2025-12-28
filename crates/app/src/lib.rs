@@ -1,32 +1,6 @@
-#[cfg(feature = "hydrate")]
-use leptos::mount::hydrate_body;
 use leptos::prelude::*;
+#[cfg(feature = "ssr")]
 use leptos_meta::*;
-use leptos_router::components::*;
-#[cfg(target_arch = "wasm32")]
-use leptos_router::hooks::use_navigate;
-#[cfg(target_arch = "wasm32")]
-use leptos_router::NavigateOptions;
-use leptos_router::path;
-#[cfg(target_arch = "wasm32")]
-use shared::dto::TokenResponse;
-use shared::dto::UserResponse;
-
-#[component]
-pub fn App() -> impl IntoView {
-    provide_meta_context();
-
-    view! {
-        <Router>
-            <Routes fallback=|| view! { <NotFound/> }>
-                <Route path=path!("") view=LandingPage/>
-                <Route path=path!("login") view=LoginPage/>
-                <Route path=path!("register") view=RegisterPage/>
-                <Route path=path!("app") view=PrivateApp/>
-            </Routes>
-        </Router>
-    }
-}
 
 #[component]
 pub fn LandingPage() -> impl IntoView {
@@ -61,28 +35,17 @@ pub fn LandingPage() -> impl IntoView {
     }
 }
 
-#[component]
-pub fn SpaApp() -> impl IntoView {
-    #[cfg(not(feature = "ssr"))]
-    provide_meta_context();
-
-    view! {
-        <Router>
-            <Routes fallback=|| view! { <NotFound/> }>
-                <Route path=path!("app") view=PrivateApp/>
-                <Route path=path!("app/login") view=LoginPage/>
-                <Route path=path!("app/register") view=RegisterPage/>
-                <Route path=path!("app/logout") view=LogoutPage/>
-                <Route path=path!("app/*any") view=NotFound/>
-            </Routes>
-        </Router>
-    }
-}
-
 #[cfg(feature = "ssr")]
 #[component]
-pub fn SpaShell(options: LeptosOptions) -> impl IntoView {
+pub fn PageShell(
+    title: &'static str,
+    options: LeptosOptions,
+    client_scripts: bool,
+    children: Children,
+) -> impl IntoView {
     provide_meta_context();
+    let options_for_scripts = options.clone();
+    let options_for_reload = options;
 
     view! {
         <!DOCTYPE html>
@@ -90,26 +53,18 @@ pub fn SpaShell(options: LeptosOptions) -> impl IntoView {
             <head>
                 <meta charset="utf-8"/>
                 <meta name="viewport" content="width=device-width, initial-scale=1"/>
-                <Title text="Leptos Production Starter"/>
+                <Title text=title/>
                 <Stylesheet id="leptos" href="/pkg/app.css"/>
-                <HydrationScripts options=options.clone()/>
-                <AutoReload options=options/>
+                <Show when=move || client_scripts fallback=|| ()>
+                    <HydrationScripts options=options_for_scripts.clone() islands=true/>
+                    <AutoReload options=options_for_reload.clone()/>
+                </Show>
                 <MetaTags/>
             </head>
             <body>
-                <SpaApp/>
+                {children()}
             </body>
         </html>
-    }
-}
-
-#[component]
-fn Metric(label: &'static str, value: &'static str) -> impl IntoView {
-    view! {
-        <div class="rounded-lg bg-slate-900/60 border border-slate-800 p-3">
-            <p class="text-slate-400 text-xs uppercase tracking-wide">{label}</p>
-            <p class="text-xl font-semibold text-emerald-300">{value}</p>
-        </div>
     }
 }
 
@@ -117,81 +72,131 @@ fn Metric(label: &'static str, value: &'static str) -> impl IntoView {
 #[wasm_bindgen::prelude::wasm_bindgen]
 pub fn hydrate() {
     console_error_panic_hook::set_once();
-    hydrate_body(|| view! { <SpaApp/> });
+    leptos::mount::hydrate_islands();
 }
 
 #[component]
-fn LoginPage() -> impl IntoView {
+pub fn LoginPage(flash_error: Option<String>) -> impl IntoView {
+    let flash_error = flash_error.unwrap_or_default();
+    let show_flash = !flash_error.is_empty();
+
     view! {
-        <AuthForm title="Login" _api_action="/api/auth/login" form_action="/app/login" kind=AuthFormKind::Login/>
+        <Show when=move || show_flash fallback=|| ()>
+            <div class="max-w-md mx-auto mt-6 px-6">
+                <div class="rounded-lg border border-rose-800/60 bg-rose-950/40 text-rose-200 px-4 py-3 text-sm">
+                    {flash_error.clone()}
+                </div>
+            </div>
+        </Show>
+        <LoginFormIsland/>
     }
 }
 
 #[component]
-fn RegisterPage() -> impl IntoView {
+pub fn RegisterPage(flash_error: Option<String>) -> impl IntoView {
+    let flash_error = flash_error.unwrap_or_default();
+    let show_flash = !flash_error.is_empty();
+
     view! {
-        <AuthForm title="Create account" _api_action="/api/auth/register" form_action="/app/register" kind=AuthFormKind::Register/>
+        <Show when=move || show_flash fallback=|| ()>
+            <div class="max-w-md mx-auto mt-6 px-6">
+                <div class="rounded-lg border border-rose-800/60 bg-rose-950/40 text-rose-200 px-4 py-3 text-sm">
+                    {flash_error.clone()}
+                </div>
+            </div>
+        </Show>
+        <RegisterFormIsland/>
     }
 }
 
-#[derive(Clone, Copy)]
-enum AuthFormKind {
-    Login,
-    Register,
+#[component]
+pub fn DashboardPage(email: String) -> impl IntoView {
+    view! {
+        <main class="min-h-screen bg-slate-950 text-slate-100">
+            <section class="max-w-5xl mx-auto px-6 py-12 space-y-6">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-sm text-emerald-300 uppercase tracking-widest">"Private area"</p>
+                        <h1 class="text-3xl font-bold">"App dashboard"</h1>
+                    </div>
+                    <a href="/logout" rel="external" class="text-sm text-slate-400 hover:text-slate-200">"Logout"</a>
+                </div>
+                <div class="card p-6 space-y-2">
+                    <p class="text-sm text-slate-400">"Authenticated as"</p>
+                    <p class="text-xl font-semibold">{email}</p>
+                </div>
+            </section>
+        </main>
+    }
 }
 
-#[component]
-fn AuthForm(
+#[island(lazy)]
+pub fn LoginFormIsland() -> impl IntoView {
+    auth_form_island_inner("Login", "/app/login", "/api/auth/login", "Log in")
+}
+
+#[island(lazy)]
+pub fn RegisterFormIsland() -> impl IntoView {
+    auth_form_island_inner(
+        "Create account",
+        "/app/register",
+        "/api/auth/register",
+        "Create account",
+    )
+}
+
+fn auth_form_island_inner(
     title: &'static str,
-    _api_action: &'static str,
     form_action: &'static str,
-    kind: AuthFormKind,
+    api_endpoint: &'static str,
+    submit_label: &'static str,
 ) -> impl IntoView {
+    #[cfg(not(target_arch = "wasm32"))]
+    let _ = api_endpoint;
+
     let email = RwSignal::new(String::new());
     let password = RwSignal::new(String::new());
     let status = RwSignal::new(Option::<String>::None);
-    #[cfg(target_arch = "wasm32")]
-    let navigate = use_navigate();
 
-    let on_submit = move |ev: leptos::ev::SubmitEvent| {
-        ev.prevent_default();
-        status.set(Some("Submitting...".into()));
+    let on_submit = move |_ev: leptos::ev::SubmitEvent| {
         #[cfg(target_arch = "wasm32")]
         {
-            use leptos::logging::log;
             use wasm_bindgen_futures::spawn_local;
+
+            _ev.prevent_default();
+            status.set(Some("Submitting...".into()));
 
             let email_val = email.get();
             let password_val = password.get();
             let status = status.clone();
-            let navigate = navigate.clone();
-            let action_url = _api_action;
+            let endpoint = api_endpoint.to_string();
             spawn_local(async move {
-                let body = serde_json::json!({ "email": email_val, "password": password_val });
-                let response = reqwasm::http::Request::post(action_url)
+                let body = serde_json::json!({
+                    "email": email_val,
+                    "password": password_val,
+                });
+
+                let resp = reqwasm::http::Request::post(&endpoint)
                     .header("Content-Type", "application/json")
                     .body(body.to_string())
                     .send()
                     .await;
 
-                match response {
-                    Ok(resp) if resp.status() == 200 || resp.status() == 201 => {
-                        if let Ok(token) = resp.json::<TokenResponse>().await {
-                            let _ = store_tokens(&token);
-                            status.set(Some("Success! Redirecting...".into()));
-                            navigate("/app", NavigateOptions::default());
-                        } else {
-                            status.set(Some("Auth response parse error".into()));
+                match resp {
+                    Ok(r) if r.status() >= 200 && r.status() < 400 => {
+                        if let Some(win) = web_sys::window() {
+                            let _ = win.location().set_href("/app");
                         }
                     }
-                    Ok(resp) => {
-                        let msg = resp.text().await.unwrap_or_else(|_| "Auth failed".into());
-                        status.set(Some(msg));
+                    Ok(r) => {
+                        let txt = r.text().await.unwrap_or_else(|_| "Auth failed".into());
+                        let msg = serde_json::from_str::<shared::error::ErrorResponse>(&txt)
+                            .ok()
+                            .map(|e| e.message)
+                            .unwrap_or(txt);
+                        status.set(Some(msg.trim().to_string()));
                     }
-                    Err(err) => {
-                        log!("auth error: {err:?}");
-                        status.set(Some("Network error".into()));
-                    }
+                    Err(_) => status.set(Some("Network error".into())),
                 }
             });
         }
@@ -229,7 +234,7 @@ fn AuthForm(
                         />
                     </label>
                     <button type="submit" class="btn-primary w-full">
-                        {match kind { AuthFormKind::Login => "Log in", AuthFormKind::Register => "Create account" }}
+                        {submit_label}
                     </button>
                     <Show when=move || status.get().is_some() fallback=|| ()>
                         <p class="text-sm text-slate-300 bg-slate-900/60 px-3 py-2 rounded">
@@ -245,137 +250,8 @@ fn AuthForm(
     }
 }
 
-#[cfg(target_arch = "wasm32")]
-fn store_tokens(token: &TokenResponse) -> Result<(), String> {
-    use web_sys::window;
-    if let Some(storage) = window().and_then(|w| w.local_storage().ok()).flatten() {
-        let _ = storage.set_item("access_token", &token.access_token);
-        let _ = storage.set_item("csrf_token", &token.csrf_token);
-    }
-    Ok(())
-}
-
 #[component]
-pub fn PrivateApp() -> impl IntoView {
-    let me = LocalResource::new(|| async move {
-            #[cfg(target_arch = "wasm32")]
-            {
-                let access = web_sys::window()
-                    .and_then(|w| w.local_storage().ok())
-                    .flatten()
-                    .and_then(|s| s.get_item("access_token").ok())
-                    .flatten();
-                let request = reqwasm::http::Request::get("/api/me");
-                let request = if let Some(token) = access {
-                    request.header("Authorization", &format!("Bearer {token}"))
-                } else {
-                    request
-                };
-                let resp = request.send().await;
-                if let Ok(resp) = resp {
-                    if resp.status() == 200 {
-                        return resp.json::<UserResponse>().await.ok();
-                    }
-                }
-            }
-            None
-        });
-
-    #[cfg(target_arch = "wasm32")]
-    {
-        // Trigger refetch after hydration to pick up stored tokens.
-        Effect::new(move |_| {
-            me.refetch();
-        });
-    }
-
-    view! {
-        <main class="min-h-screen bg-slate-950 text-slate-100">
-            <section class="max-w-5xl mx-auto px-6 py-12 space-y-6">
-                <div class="flex items-center justify-between">
-                    <div>
-                        <p class="text-sm text-emerald-300 uppercase tracking-widest">"Private area"</p>
-                        <h1 class="text-3xl font-bold">"App dashboard"</h1>
-                    </div>
-                    <a href="/logout" rel="external" class="text-sm text-slate-400 hover:text-slate-200">"Logout"</a>
-                </div>
-                <Suspense fallback=move || view! { <div class="card p-6"><p class="text-slate-300">"Loading session..."</p></div> }>
-                    {move || {
-                        match me.get() {
-                            Some(Some(user)) => render_user(user).into_any(),
-                            Some(None) => view! {
-                                <div class="card p-6 space-y-3">
-                                    <p class="text-slate-300">"You are not authenticated."</p>
-                                    <div class="flex gap-3">
-                                        <A href="/app/login" {..} class="btn-primary">"Log in"</A>
-                                        <A href="/app/register" {..} class="btn-secondary border border-slate-800 px-4 py-2 rounded-lg">"Register"</A>
-                                    </div>
-                                </div>
-                            }.into_any(),
-                            None => view! { <p class="text-slate-400">"Loading user..."</p> }.into_any(),
-                        }
-                    }}
-                </Suspense>
-            </section>
-        </main>
-    }
-}
-
-#[component]
-fn LogoutPage() -> impl IntoView {
-    #[cfg(target_arch = "wasm32")]
-    {
-        use wasm_bindgen_futures::spawn_local;
-        spawn_local(async move {
-            let csrf = web_sys::window()
-                .and_then(|w| w.local_storage().ok())
-                .flatten()
-                .and_then(|s| s.get_item("csrf_token").ok())
-                .flatten();
-
-            let mut req = reqwasm::http::Request::post("/api/auth/logout");
-            if let Some(csrf) = csrf {
-                req = req.header("x-csrf-token", &csrf);
-            }
-
-            let _ = req.send().await;
-
-            if let Some(storage) = web_sys::window()
-                .and_then(|w| w.local_storage().ok())
-                .flatten()
-            {
-                let _ = storage.remove_item("access_token");
-                let _ = storage.remove_item("csrf_token");
-            }
-
-            if let Some(window) = web_sys::window() {
-                let _ = window.location().set_href("/");
-            }
-        });
-    }
-
-    view! {
-        <main class="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center px-6">
-            <div class="card p-6">
-                <p class="text-slate-300">"Logging out..."</p>
-            </div>
-        </main>
-    }
-}
-
-fn render_user(user: UserResponse) -> AnyView {
-    view! {
-        <div class="card p-6 space-y-2">
-            <p class="text-sm text-slate-400">"Authenticated as"</p>
-            <p class="text-xl font-semibold">{user.email.clone()}</p>
-            <p class="text-sm text-slate-400">{"Role: "}{format!("{:?}", user.role)}</p>
-        </div>
-    }
-    .into_any()
-}
-
-#[component]
-fn NotFound() -> impl IntoView {
+pub fn NotFoundPage() -> impl IntoView {
     #[cfg(feature = "ssr")]
     {
         if let Some(res) = use_context::<leptos_axum::ResponseOptions>() {
