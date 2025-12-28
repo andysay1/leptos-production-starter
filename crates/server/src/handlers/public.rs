@@ -1,5 +1,7 @@
+use axum::http::Uri;
 use axum::response::{Html, IntoResponse};
 use http::header;
+use http::StatusCode;
 
 pub async fn landing() -> impl IntoResponse {
     let html = r#"<!doctype html>
@@ -34,6 +36,34 @@ pub async fn landing() -> impl IntoResponse {
         .to_string();
 
     (
+        [(header::CONTENT_TYPE, "text/html; charset=utf-8")],
+        Html(html),
+    )
+}
+
+pub async fn not_found(_uri: Uri) -> impl IntoResponse {
+    let html = r#"<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>404 - Not found</title>
+    <link rel="stylesheet" href="/pkg/app.css">
+  </head>
+  <body>
+    <main class="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center">
+      <div class="text-center space-y-4">
+        <p class="text-sm text-emerald-300 uppercase tracking-widest">404</p>
+        <h1 class="text-3xl font-bold">Page not found</h1>
+        <a href="/" class="btn-primary">Back home</a>
+      </div>
+    </main>
+  </body>
+</html>"#
+        .to_string();
+
+    (
+        StatusCode::NOT_FOUND,
         [(header::CONTENT_TYPE, "text/html; charset=utf-8")],
         Html(html),
     )

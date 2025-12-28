@@ -72,6 +72,8 @@ pub fn SpaApp() -> impl IntoView {
                 <Route path=path!("app") view=PrivateApp/>
                 <Route path=path!("app/login") view=LoginPage/>
                 <Route path=path!("app/register") view=RegisterPage/>
+                <Route path=path!("app/logout") view=LogoutPage/>
+                <Route path=path!("app/*any") view=NotFound/>
             </Routes>
         </Router>
     }
@@ -236,7 +238,7 @@ fn AuthForm(
                     </Show>
                 </form>
                 <div class="text-center text-sm text-slate-400">
-                    <A href="/" {..} class="text-emerald-300 hover:text-emerald-200">"Back to landing"</A>
+                    <a href="/" rel="external" class="text-emerald-300 hover:text-emerald-200">"Back to landing"</a>
                 </div>
             </div>
         </main>
@@ -295,7 +297,7 @@ pub fn PrivateApp() -> impl IntoView {
                         <p class="text-sm text-emerald-300 uppercase tracking-widest">"Private area"</p>
                         <h1 class="text-3xl font-bold">"App dashboard"</h1>
                     </div>
-                    <A href="/logout" {..} class="text-sm text-slate-400 hover:text-slate-200">"Logout via API"</A>
+                    <a href="/logout" rel="external" class="text-sm text-slate-400 hover:text-slate-200">"Logout"</a>
                 </div>
                 <Suspense fallback=move || view! { <div class="card p-6"><p class="text-slate-300">"Loading session..."</p></div> }>
                     {move || {
@@ -305,8 +307,8 @@ pub fn PrivateApp() -> impl IntoView {
                                 <div class="card p-6 space-y-3">
                                     <p class="text-slate-300">"You are not authenticated."</p>
                                     <div class="flex gap-3">
-                                        <A href="/login" {..} class="btn-primary">"Log in"</A>
-                                        <A href="/register" {..} class="btn-secondary border border-slate-800 px-4 py-2 rounded-lg">"Register"</A>
+                                        <A href="/app/login" {..} class="btn-primary">"Log in"</A>
+                                        <A href="/app/register" {..} class="btn-secondary border border-slate-800 px-4 py-2 rounded-lg">"Register"</A>
                                     </div>
                                 </div>
                             }.into_any(),
@@ -315,6 +317,48 @@ pub fn PrivateApp() -> impl IntoView {
                     }}
                 </Suspense>
             </section>
+        </main>
+    }
+}
+
+#[component]
+fn LogoutPage() -> impl IntoView {
+    #[cfg(target_arch = "wasm32")]
+    {
+        use wasm_bindgen_futures::spawn_local;
+        spawn_local(async move {
+            let csrf = web_sys::window()
+                .and_then(|w| w.local_storage().ok())
+                .flatten()
+                .and_then(|s| s.get_item("csrf_token").ok())
+                .flatten();
+
+            let mut req = reqwasm::http::Request::post("/api/auth/logout");
+            if let Some(csrf) = csrf {
+                req = req.header("x-csrf-token", &csrf);
+            }
+
+            let _ = req.send().await;
+
+            if let Some(storage) = web_sys::window()
+                .and_then(|w| w.local_storage().ok())
+                .flatten()
+            {
+                let _ = storage.remove_item("access_token");
+                let _ = storage.remove_item("csrf_token");
+            }
+
+            if let Some(window) = web_sys::window() {
+                let _ = window.location().set_href("/");
+            }
+        });
+    }
+
+    view! {
+        <main class="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center px-6">
+            <div class="card p-6">
+                <p class="text-slate-300">"Logging out..."</p>
+            </div>
         </main>
     }
 }
@@ -332,12 +376,19 @@ fn render_user(user: UserResponse) -> AnyView {
 
 #[component]
 fn NotFound() -> impl IntoView {
+    #[cfg(feature = "ssr")]
+    {
+        if let Some(res) = use_context::<leptos_axum::ResponseOptions>() {
+            res.set_status(http::StatusCode::NOT_FOUND);
+        }
+    }
+
     view! {
         <main class="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center">
             <div class="text-center space-y-4">
                 <p class="text-sm text-emerald-300 uppercase tracking-widest">"404"</p>
                 <h1 class="text-3xl font-bold">"Page not found"</h1>
-                <A href="/" {..} class="btn-primary">"Back home"</A>
+                <a href="/" rel="external" class="btn-primary">"Back home"</a>
             </div>
         </main>
     }

@@ -153,6 +153,14 @@ pub async fn logout(
     (cleared, StatusCode::NO_CONTENT).into_response()
 }
 
+pub async fn logout_get(
+    State(state): State<AppState>,
+    jar: CookieJar,
+) -> impl IntoResponse {
+    let cleared = clear_session(jar, &state.config);
+    (cleared, Redirect::to("/")).into_response()
+}
+
 #[instrument(skip(state))]
 pub async fn me(
     State(state): State<AppState>,

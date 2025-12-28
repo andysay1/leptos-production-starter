@@ -84,11 +84,19 @@ sass-file = ""
 lib-package = "app"
 bin-package = "server"
 hydrate-package = "app"
-lib-profile-release = "release"
+lib-profile-release = "wasm-release"
 watch-additional = ["assets"]
 lib-features = ["hydrate"]
 tailwind-input-file = "assets/tailwind.css"
 tailwind-config-file = "tailwind.config.js"
+
+[profile.wasm-release]
+inherits = "release"
+opt-level = "z"
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = "debuginfo"
 
 [patch.crates-io]
 home = { path = "vendor/home" }

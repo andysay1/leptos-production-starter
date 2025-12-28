@@ -132,6 +132,7 @@ fn build_router(
         .route("/", get(public::landing))
         .route("/login", get(|| async { Redirect::temporary("/app/login") }))
         .route("/register", get(|| async { Redirect::temporary("/app/register") }))
+        .route("/logout", get(auth::logout_get))
         .route("/app/login", post(auth::login_form))
         .route("/app/register", post(auth::register_form))
         .merge(api_routes)
@@ -141,12 +142,23 @@ fn build_router(
         });
 
     router
-        .nest_service("/pkg", ServeDir::new(pkg_dir))
-        .nest_service("/assets", ServeDir::new(&site_root))
+        .nest_service(
+            "/pkg",
+            ServeDir::new(pkg_dir)
+                .precompressed_br()
+                .precompressed_gzip(),
+        )
+        .nest_service(
+            "/assets",
+            ServeDir::new(&site_root)
+                .precompressed_br()
+                .precompressed_gzip(),
+        )
         .layer(middleware::from_fn(inject_request_id))
         .layer(trace_layer)
         .layer(CorsLayer::permissive())
         .with_state(state)
+        .fallback(public::not_found)
 }
 
 async fn inject_request_id(
