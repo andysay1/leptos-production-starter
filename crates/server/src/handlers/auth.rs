@@ -267,33 +267,41 @@ fn attach_session_cookies(
 }
 
 fn clear_session(jar: CookieJar, config: &shared::config::AppConfig) -> CookieJar {
-    let refresh =
+    let mut refresh =
         axum_extra::extract::cookie::Cookie::build((config.auth.refresh_cookie_name.clone(), ""))
             .http_only(true)
             .same_site(axum_extra::extract::cookie::SameSite::Lax)
             .secure(config.auth.cookie_secure)
-            .domain(config.server.cookie_domain.clone())
             .path("/")
-            .max_age(TimeDuration::seconds(0))
-            .build();
-    let access =
+            .max_age(TimeDuration::seconds(0));
+    let mut access =
         axum_extra::extract::cookie::Cookie::build((config.auth.access_cookie_name.clone(), ""))
             .http_only(true)
             .same_site(axum_extra::extract::cookie::SameSite::Lax)
             .secure(config.auth.cookie_secure)
-            .domain(config.server.cookie_domain.clone())
             .path("/")
-            .max_age(TimeDuration::seconds(0))
-            .build();
-    let csrf =
+            .max_age(TimeDuration::seconds(0));
+    let mut csrf =
         axum_extra::extract::cookie::Cookie::build((config.auth.csrf_cookie_name.clone(), ""))
             .http_only(false)
             .same_site(axum_extra::extract::cookie::SameSite::Lax)
             .secure(config.auth.cookie_secure)
-            .domain(config.server.cookie_domain.clone())
             .path("/")
-            .max_age(TimeDuration::seconds(0))
-            .build();
+            .max_age(TimeDuration::seconds(0));
+
+    // Keep dev cookies host-only to avoid mismatch between localhost/127.0.0.1.
+    if config.server.env.is_prod() {
+        let domain = config.server.cookie_domain.trim().to_ascii_lowercase();
+        if !(domain.is_empty() || domain == "localhost" || domain == "127.0.0.1" || domain == "0.0.0.0") {
+            refresh = refresh.domain(config.server.cookie_domain.clone());
+            access = access.domain(config.server.cookie_domain.clone());
+            csrf = csrf.domain(config.server.cookie_domain.clone());
+        }
+    }
+
+    let refresh = refresh.build();
+    let access = access.build();
+    let csrf = csrf.build();
     jar.add(access).add(refresh).add(csrf)
 }
 

@@ -132,28 +132,6 @@ pub fn DashboardPage(email: String) -> impl IntoView {
 
 #[island(lazy)]
 pub fn LoginFormIsland() -> impl IntoView {
-    auth_form_island_inner("Login", "/app/login", "/api/auth/login", "Log in")
-}
-
-#[island(lazy)]
-pub fn RegisterFormIsland() -> impl IntoView {
-    auth_form_island_inner(
-        "Create account",
-        "/app/register",
-        "/api/auth/register",
-        "Create account",
-    )
-}
-
-fn auth_form_island_inner(
-    title: &'static str,
-    form_action: &'static str,
-    api_endpoint: &'static str,
-    submit_label: &'static str,
-) -> impl IntoView {
-    #[cfg(not(target_arch = "wasm32"))]
-    let _ = api_endpoint;
-
     let email = RwSignal::new(String::new());
     let password = RwSignal::new(String::new());
     let status = RwSignal::new(Option::<String>::None);
@@ -169,34 +147,14 @@ fn auth_form_island_inner(
             let email_val = email.get();
             let password_val = password.get();
             let status = status.clone();
-            let endpoint = api_endpoint.to_string();
             spawn_local(async move {
-                let body = serde_json::json!({
-                    "email": email_val,
-                    "password": password_val,
-                });
-
-                let resp = reqwasm::http::Request::post(&endpoint)
-                    .header("Content-Type", "application/json")
-                    .body(body.to_string())
-                    .send()
-                    .await;
-
-                match resp {
-                    Ok(r) if r.status() >= 200 && r.status() < 400 => {
+                match login_api_request(email_val, password_val).await {
+                    Ok(()) => {
                         if let Some(win) = web_sys::window() {
                             let _ = win.location().set_href("/app");
                         }
                     }
-                    Ok(r) => {
-                        let txt = r.text().await.unwrap_or_else(|_| "Auth failed".into());
-                        let msg = serde_json::from_str::<shared::error::ErrorResponse>(&txt)
-                            .ok()
-                            .map(|e| e.message)
-                            .unwrap_or(txt);
-                        status.set(Some(msg.trim().to_string()));
-                    }
-                    Err(_) => status.set(Some("Network error".into())),
+                    Err(msg) => status.set(Some(msg)),
                 }
             });
         }
@@ -207,10 +165,10 @@ fn auth_form_island_inner(
             <div class="w-full max-w-md space-y-6">
                 <div class="text-center space-y-2">
                     <p class="text-emerald-300 font-semibold text-sm uppercase tracking-widest">"Secure area"</p>
-                    <h1 class="text-3xl font-bold">{title}</h1>
+                    <h1 class="text-3xl font-bold">"Login"</h1>
                     <p class="text-slate-400 text-sm">"JWT + refresh cookie flow with CSRF token."</p>
                 </div>
-                <form class="card p-6 space-y-4" action=form_action method="post" on:submit=on_submit>
+                <form class="card p-6 space-y-4" action="/app/login" method="post" on:submit=on_submit>
                     <label class="block space-y-2">
                         <span class="text-sm text-slate-300">"Email"</span>
                         <input
@@ -234,7 +192,7 @@ fn auth_form_island_inner(
                         />
                     </label>
                     <button type="submit" class="btn-primary w-full">
-                        {submit_label}
+                        "Log in"
                     </button>
                     <Show when=move || status.get().is_some() fallback=|| ()>
                         <p class="text-sm text-slate-300 bg-slate-900/60 px-3 py-2 rounded">
@@ -248,6 +206,156 @@ fn auth_form_island_inner(
             </div>
         </main>
     }
+}
+
+#[island(lazy)]
+pub fn RegisterFormIsland() -> impl IntoView {
+    let email = RwSignal::new(String::new());
+    let password = RwSignal::new(String::new());
+    let status = RwSignal::new(Option::<String>::None);
+
+    let on_submit = move |_ev: leptos::ev::SubmitEvent| {
+        #[cfg(target_arch = "wasm32")]
+        {
+            use wasm_bindgen_futures::spawn_local;
+
+            _ev.prevent_default();
+            status.set(Some("Submitting...".into()));
+
+            let email_val = email.get();
+            let password_val = password.get();
+            let status = status.clone();
+            spawn_local(async move {
+                match register_api_request(email_val, password_val).await {
+                    Ok(()) => {
+                        if let Some(win) = web_sys::window() {
+                            let _ = win.location().set_href("/app");
+                        }
+                    }
+                    Err(msg) => status.set(Some(msg)),
+                }
+            });
+        }
+    };
+
+    view! {
+        <main class="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center px-6">
+            <div class="w-full max-w-md space-y-6">
+                <div class="text-center space-y-2">
+                    <p class="text-emerald-300 font-semibold text-sm uppercase tracking-widest">"Secure area"</p>
+                    <h1 class="text-3xl font-bold">"Create account"</h1>
+                    <p class="text-slate-400 text-sm">"JWT + refresh cookie flow with CSRF token."</p>
+                </div>
+                <form class="card p-6 space-y-4" action="/app/register" method="post" on:submit=on_submit>
+                    <label class="block space-y-2">
+                        <span class="text-sm text-slate-300">"Email"</span>
+                        <input
+                            class="input"
+                            type="email"
+                            name="email"
+                            placeholder="you@example.com"
+                            on:input=move |ev| email.set(event_target_value(&ev))
+                            required
+                        />
+                    </label>
+                    <label class="block space-y-2">
+                        <span class="text-sm text-slate-300">"Password"</span>
+                        <input
+                            class="input"
+                            type="password"
+                            name="password"
+                            placeholder="••••••••"
+                            on:input=move |ev| password.set(event_target_value(&ev))
+                            required
+                        />
+                    </label>
+                    <button type="submit" class="btn-primary w-full">
+                        "Create account"
+                    </button>
+                    <Show when=move || status.get().is_some() fallback=|| ()>
+                        <p class="text-sm text-slate-300 bg-slate-900/60 px-3 py-2 rounded">
+                            {move || status.get().unwrap_or_default()}
+                        </p>
+                    </Show>
+                </form>
+                <div class="text-center text-sm text-slate-400">
+                    <a href="/" rel="external" class="text-emerald-300 hover:text-emerald-200">"Back to landing"</a>
+                </div>
+            </div>
+        </main>
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+#[leptos::prelude::lazy]
+async fn login_api_request(email: String, password: String) -> Result<(), String> {
+    let body = serde_json::json!({ "email": email, "password": password }).to_string();
+    let txt = fetch_json("/api/auth/login", body)
+        .await
+        .map_err(|_| "Network error".to_string())?;
+    let status = txt.0;
+    let txt = txt.1;
+
+    if status >= 200 && status < 400 {
+        return Ok(());
+    }
+    let msg = serde_json::from_str::<serde_json::Value>(&txt)
+        .ok()
+        .and_then(|v| v.get("message")?.as_str().map(|s| s.to_string()))
+        .unwrap_or(txt);
+    Err(msg.trim().to_string())
+}
+
+#[cfg(target_arch = "wasm32")]
+#[leptos::prelude::lazy]
+async fn register_api_request(email: String, password: String) -> Result<(), String> {
+    let body = serde_json::json!({ "email": email, "password": password }).to_string();
+    let txt = fetch_json("/api/auth/register", body)
+        .await
+        .map_err(|_| "Network error".to_string())?;
+    let status = txt.0;
+    let txt = txt.1;
+
+    if status >= 200 && status < 400 {
+        return Ok(());
+    }
+    let msg = serde_json::from_str::<serde_json::Value>(&txt)
+        .ok()
+        .and_then(|v| v.get("message")?.as_str().map(|s| s.to_string()))
+        .unwrap_or(txt);
+    Err(msg.trim().to_string())
+}
+
+#[cfg(target_arch = "wasm32")]
+async fn fetch_json(url: &str, body: String) -> Result<(u16, String), wasm_bindgen::JsValue> {
+    use wasm_bindgen::JsCast;
+    use wasm_bindgen::JsValue;
+    use wasm_bindgen_futures::JsFuture;
+
+    let Some(window) = web_sys::window() else {
+        return Err(JsValue::from_str("missing window"));
+    };
+
+    let init = web_sys::RequestInit::new();
+    init.set_method("POST");
+    init.set_credentials(web_sys::RequestCredentials::SameOrigin);
+    init.set_body(&JsValue::from_str(&body));
+
+    let request = web_sys::Request::new_with_str_and_init(url, &init)?;
+    request.headers().set("Content-Type", "application/json")?;
+    request.headers().set("Accept", "application/json")?;
+
+    let resp_value = JsFuture::from(window.fetch_with_request(&request)).await?;
+    let resp: web_sys::Response = resp_value.dyn_into()?;
+    let status = resp.status() as u16;
+
+    let text_promise = resp.text()?;
+    let text = JsFuture::from(text_promise)
+        .await?
+        .as_string()
+        .unwrap_or_default();
+
+    Ok((status, text))
 }
 
 #[component]

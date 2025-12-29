@@ -25,23 +25,23 @@ hydrate = [
 ]
 ssr = [
     "leptos/ssr",
+    "dep:leptos_meta",
     "leptos_meta/ssr",
     "dep:leptos_axum",
+    "dep:http",
 ]
 
 [dependencies]
 console_error_panic_hook = { version = "0.1", optional = true }
 leptos = { workspace = true, default-features = false }
 leptos_axum = { workspace = true, optional = true, default-features = false }
-leptos_meta = { workspace = true, default-features = false }
+leptos_meta = { workspace = true, optional = true, default-features = false }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
-http = { workspace = true }
-shared = { path = "../shared" }
+http = { workspace = true, optional = true }
 thiserror = { workspace = true }
 wasm-bindgen = { version = "0.2", optional = true }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
-reqwasm = "0.5"
 wasm-bindgen-futures = "0.4"
-web-sys = { version = "0.3", features = ["Location", "Storage", "Window"] }
+web-sys = { version = "0.3", features = ["Headers", "Location", "Request", "RequestCredentials", "RequestInit", "Response", "Storage", "Window"] }
